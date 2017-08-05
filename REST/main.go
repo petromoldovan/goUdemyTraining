@@ -6,9 +6,20 @@ import (
 	"database/sql"
 	_ "github.com/lib/pq"
 	"encoding/json"
+	"strconv"
+	"os"
 )
 
 var db *sql.DB
+
+type User struct {
+	ID 				int
+	FirstName 		string		`json:"first_name"`
+	Surname			string		`json:"surname"`
+	PhoneNumber		string		`json:"phone_number"`
+	Email			string		`json:"email"`
+	isActive		bool
+}
 
 func init() {
 	var err error
@@ -20,21 +31,15 @@ func init() {
 	if err = db.Ping(); err != nil {
 		panic(err)
 	}
-	fmt.Println("connected")
-}
-
-type User struct {
-	ID 					int
-	FirstName 	string
-	Surname			string
-	PhoneNumber	string
-	Email				string
-	isActive		bool
+	fmt.Println("db connected")
 }
 
 func main() {
-	http.HandleFunc("/users/show", usersShow)
 	http.HandleFunc("/users", userShowByID)
+	http.HandleFunc("/users/show", usersShow)
+	http.HandleFunc("/users/create", userCreate)
+	http.HandleFunc("/users/delete", userDelete)
+	http.HandleFunc("/users/update", userUpdate)
 	http.ListenAndServe(":8080", nil)
 }
 
@@ -115,3 +120,101 @@ func userShowByID(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(user)
 }
+
+
+func userCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, http.StatusText(405), http.StatusMethodNotAllowed)
+	}
+
+	newUser := &User{}
+	newUser.FirstName = r.FormValue("firstName")
+	newUser.Surname = r.FormValue("surname")
+	newUser.PhoneNumber = r.FormValue("phone")
+	newUser.Email = r.FormValue("email")
+
+	if newUser.FirstName == "" || newUser.Surname == "" || newUser.PhoneNumber == "" || newUser.Email == "" {
+		http.Error(w, http.StatusText(400), http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec("INSERT INTO users (first_name, surname, phone_number, email) VALUES ($1, $2, $3, $4)", newUser.FirstName, newUser.Surname, newUser.PhoneNumber, newUser.Email)
+	if err != nil {
+		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("user created", newUser)
+}
+
+func userUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, http.StatusText(405), http.StatusMethodNotAllowed)
+	}
+
+	newUser := &User{}
+	newUser.FirstName = r.FormValue("firstName")
+	newUser.Surname = r.FormValue("surname")
+	newUser.PhoneNumber = r.FormValue("phone")
+	newUser.Email = r.FormValue("email")
+
+
+	id := r.FormValue("id")
+	idInt, errConv := strconv.Atoi(id)
+	if errConv != nil {
+		// handle error
+		fmt.Println(errConv)
+		os.Exit(2)
+	}
+	newUser.ID = int(idInt)
+
+	if newUser.FirstName == "" || newUser.Surname == "" || newUser.PhoneNumber == "" || newUser.Email == "" {
+		http.Error(w, http.StatusText(400), http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec("UPDATE users SET first_name=$1, surname=$2, phone_number=$3, email=$4 WHERE id=$5", newUser.FirstName, newUser.Surname, newUser.PhoneNumber, newUser.Email, newUser.ID)
+	if err != nil {
+		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("user updated", newUser)
+}
+
+func userDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, http.StatusText(405), http.StatusMethodNotAllowed)
+	}
+
+	id := r.FormValue("id")
+	if id == "" {
+		http.Error(w, http.StatusText(400), http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec("DELETE FROM users WHERE id=$1", id)
+	if err != nil {
+		http.Error(w, http.StatusText(500), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("user deleted", id)
+}
+
+/*func userCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, http.StatusText(405), http.StatusMethodNotAllowed)
+	}
+
+	newUser := make(map[string]interface{})
+
+	//get data
+	json.NewDecoder(r.Body).Decode(&newUser)
+	fmt.Println(newUser)
+
+	for key, v := range newUser {
+		fmt.Println(key)
+		fmt.Println(v)
+	}
+}*/
